@@ -481,7 +481,7 @@ export default function Home() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={!ticketPrice}
-                className="flex w-full mt-8 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-3 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50"
+                className="flex w-full mt-6 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-3 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50"
               >
                 <span>Payment</span>
                 <span>Total: {formatCurrency(totalPrice)}</span>
