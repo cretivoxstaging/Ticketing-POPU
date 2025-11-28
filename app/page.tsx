@@ -12,6 +12,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
+interface StarDividerProps {
+  content: string;
+  wrapperClassName?: string;
+  textClassName?: string;
+}
+
+const StarDivider = ({
+  content,
+  wrapperClassName = "",
+  textClassName = "",
+}: StarDividerProps) => (
+  <div className={`relative w-full overflow-hidden ${wrapperClassName}`}>
+    <span
+      className={`relative left-1/2 -translate-x-1/2 inline-block whitespace-nowrap font-mono tracking-[0.2em] text-zinc-700 ${textClassName}`}
+    >
+      {content}
+    </span>
+  </div>
+);
+
 export default function Home() {
   const [qty, setQty] = useState(1);
   const [isDateDialogOpen, setIsDateDialogOpen] = useState(false);
@@ -24,6 +44,8 @@ export default function Home() {
   const [selectedDates, setSelectedDates] = useState<number[]>([]);
   const [ticketPrice, setTicketPrice] = useState(0);
   const [ticketCategory, setTicketCategory] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const totalPrice = qty * ticketPrice;
 
   const decrease = () => {
@@ -49,16 +71,128 @@ export default function Home() {
     setSelectedDates((prev) => (prev.includes(date) ? [] : [date]));
   };
 
-  const handleSubmit = () => {
-    // Handle form submission here
-    console.log("Form submitted:", { formData, selectedDates });
-    setIsContactDialogOpen(false);
-    // Reset form
-    setFormData({ name: "", email: "", whatsapp: "" });
-    setSelectedDates([]);
-    setTicketCategory("");
-    setTicketPrice(0);
-    setQty(1);
+  // Fungsi untuk menghitung event_id berdasarkan tipe tiket dan tanggal
+  const getEventId = (category: string, date: number): number => {
+    // Mapping event_id berdasarkan kombinasi tipe tiket dan tanggal
+    const eventIdMap: Record<string, Record<number, number>> = {
+      "EARLY BIRD": {
+        6: 1,
+        7: 2,
+        8: 3,
+      },
+      "SINGLE": {
+        6: 4,
+        7: 5,
+        8: 6,
+      },
+      "COUPLE BUNDLE": {
+        6: 7,
+        7: 8,
+        8: 9,
+      },
+      "FAMILY BUNDLE": {
+        6: 10,
+        7: 11,
+        8: 12,
+      },
+      "GROUP BUNDLE": {
+        6: 13,
+        7: 14,
+        8: 15,
+      },
+      "NORMAL TICKET": {
+        6: 16,
+        7: 17,
+        8: 18,
+      },
+    };
+
+    return eventIdMap[category]?.[date] || 1;
+  };
+
+  // Fungsi untuk memformat tanggal ke format "6 February 2026"
+  const formatDateTicket = (date: number): string => {
+    return `${date} February 2026`;
+  };
+
+  // Fungsi untuk mengkonversi kategori tiket ke format API
+  const formatTicketType = (category: string): string => {
+    const categoryMap: Record<string, string> = {
+      "EARLY BIRD": "Early Bird",
+      "SINGLE": "Single",
+      "COUPLE BUNDLE": "Couple Bundle",
+      "FAMILY BUNDLE": "Family Bundle",
+      "GROUP BUNDLE": "Group Bundle",
+      "NORMAL TICKET": "Normal Ticket",
+    };
+    return categoryMap[category] || category;
+  };
+
+  const handleSubmit = async () => {
+    // Validasi form
+    if (!formData.name || !formData.email || !formData.whatsapp) {
+      setSubmitError("Mohon lengkapi semua field");
+      return;
+    }
+
+    if (!selectedDates.length) {
+      setSubmitError("Mohon pilih tanggal");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const selectedDate = selectedDates[0]; // Ambil tanggal pertama yang dipilih
+      const eventId = getEventId(ticketCategory, selectedDate);
+      const typeTicket = formatTicketType(ticketCategory);
+
+      // Payload sesuai dengan yang di Postman (tanpa date_ticket)
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        whatsapp: formData.whatsapp,
+        type_ticket: typeTicket,
+        qty: qty,
+        event_id: eventId,
+      };
+
+      const response = await fetch("/api/participant", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Gagal membuat participant");
+      }
+
+      const data = await response.json();
+      console.log("Participant created:", data);
+
+      // Reset form setelah berhasil
+      setIsContactDialogOpen(false);
+      setFormData({ name: "", email: "", whatsapp: "" });
+      setSelectedDates([]);
+      setTicketCategory("");
+      setTicketPrice(0);
+      setQty(1);
+      setSubmitError(null);
+
+      // Bisa tambahkan notifikasi sukses di sini
+      alert("Pesanan berhasil dibuat!");
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      setSubmitError(
+        error instanceof Error ? error.message : "Terjadi kesalahan saat mengirim data"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleProceedToContact = () => {
@@ -76,7 +210,7 @@ export default function Home() {
           backgroundSize: "390px auto",
         }}
       >
-      {/* Header */}
+        {/* Header */}
         <div className="pt-50 flex flex-col items-center px-6">
           <img
             src="/images/logo.png"
@@ -84,9 +218,10 @@ export default function Home() {
             className="w-48 h-auto"
           />
           <div className="mt-1 w-full rounded-xl p-4 text-center font-mono text-sm text-zinc-900">
-            <p className="tracking-[0.2em] text-xs text-zinc-700">
-              ********************************
-            </p>
+            <StarDivider
+              content="********************************"
+              textClassName="text-xs"
+            />
             <p className="text-[11px] mt-3 leading-relaxed">
               Where all gamers, geeks, weebs, &amp; art enthusiasts gather in
               one place with POP Culture Spirits. While we love events as you
@@ -114,16 +249,18 @@ export default function Home() {
             />
           </div>
 
-        {/* Ticket */}
+          {/* Ticket */}
           <div className="mt-2 w-full rounded-xl px-4 py-3 font-mono text-xs text-zinc-900">
             <div className="flex items-center justify-between text-[11px] font-semibold">
               <span>Category.</span>
               <span className="ml-24">Price.</span>
               <span>Action.</span>
             </div>
-            <p className="mt-1 text-center text-[10px] tracking-[0.2em] text-zinc-700">
-              ***************************************
-            </p>
+            <StarDivider
+              content="***************************************"
+              wrapperClassName="mt-1"
+              textClassName="text-[10px]"
+            />
 
             {/* Early Bird */}
             <div className="mt-1 flex items-center justify-between">
@@ -148,9 +285,11 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[10px] tracking-[0.2em] text-zinc-700">
-              ***************************************
-            </p>
+            <StarDivider
+              content="***************************************"
+              wrapperClassName="mt-2"
+              textClassName="text-[10px]"
+            />
 
             {/* SINGLE */}
             <div className="mt-1 flex items-center justify-between">
@@ -175,9 +314,11 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[10px] tracking-[0.2em] text-zinc-700">
-              ***************************************
-            </p>
+            <StarDivider
+              content="***************************************"
+              wrapperClassName="mt-2"
+              textClassName="text-[10px]"
+            />
 
             {/* COUPLE */}
             <div className="mt-1 flex items-center justify-between">
@@ -202,9 +343,11 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[10px] tracking-[0.2em] text-zinc-700">
-              ***************************************
-            </p>
+            <StarDivider
+              content="***************************************"
+              wrapperClassName="mt-2"
+              textClassName="text-[10px]"
+            />
 
             {/* Family Bundle */}
             <div className="mt-1 flex items-center justify-between">
@@ -229,9 +372,11 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[10px] tracking-[0.2em] text-zinc-700">
-              ***************************************
-            </p>
+            <StarDivider
+              content="***************************************"
+              wrapperClassName="mt-2"
+              textClassName="text-[10px]"
+            />
 
             {/* Group Bundle */}
             <div className="mt-1 flex items-center justify-between">
@@ -256,9 +401,11 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[10px] tracking-[0.2em] text-zinc-700">
-              ***************************************
-            </p>
+            <StarDivider
+              content="***************************************"
+              wrapperClassName="mt-2"
+              textClassName="text-[10px]"
+            />
 
             {/* Normal */}
             <div className="mt-1 flex items-center justify-between">
@@ -283,9 +430,11 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[10px] tracking-[0.2em] text-zinc-700">
-              ***************************************
-            </p>
+            <StarDivider
+              content="***************************************"
+              wrapperClassName="mt-2"
+              textClassName="text-[10px]"
+            />
           </div>
 
           {/* continue payment button */}
@@ -297,7 +446,7 @@ export default function Home() {
             Continue Payment
           </button> */}
 
-        {/* footer */}
+          {/* footer */}
           <div className="mt-8 flex flex-col items-center gap-4 pb-6 text-center font-mono text-xs text-zinc-900">
             <img
               src="/images/logo2.png"
@@ -328,7 +477,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Select Date Dialog */}
+      {/* Popup Select Date */}
       <Dialog open={isDateDialogOpen}>
         <DialogContent
           showCloseButton={false}
@@ -382,7 +531,7 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      {/* Contact Information Dialog */}
+      {/* Popup Information */}
       <Dialog open={isContactDialogOpen}>
         <DialogContent
           showCloseButton={false}
@@ -442,7 +591,9 @@ export default function Home() {
 
             {/* WhatsApp Input */}
             <div className="space-y-2">
-              <Label className="text-white font-semibold">WhatsApp NUMBER:</Label>
+              <Label className="text-white font-semibold">
+                WhatsApp NUMBER:
+              </Label>
               <Input
                 type="tel"
                 placeholder="Enter your WhatsApp Number"
@@ -464,7 +615,8 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={decrease}
-                  className="size-10 rounded-full bg-[#F5B045] text-black text-2xl font-bold leading-none shadow"
+                  disabled={isSubmitting}
+                  className="size-10 rounded-full bg-[#F5B045] text-black text-2xl font-bold leading-none shadow disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   -
                 </button>
@@ -472,18 +624,27 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={increase}
-                  className="size-10 rounded-full bg-yellow-400 text-black text-2xl font-bold leading-none shadow"
+                  disabled={isSubmitting}
+                  className="size-10 rounded-full bg-yellow-400 text-black text-2xl font-bold leading-none shadow disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   +
                 </button>
               </div>
+              
+              {/* Error Message */}
+              {submitError && (
+                <div className="mt-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
+                  {submitError}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!ticketPrice}
-                className="flex w-full mt-8 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-3 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50"
+                disabled={!ticketPrice || isSubmitting || !formData.name || !formData.email || !formData.whatsapp}
+                className="flex w-full mt-8 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-3 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg"
               >
-                <span>Payment</span>
+                <span>{isSubmitting ? "Processing..." : "Payment"}</span>
                 <span>Total: {formatCurrency(totalPrice)}</span>
               </button>
             </div>
