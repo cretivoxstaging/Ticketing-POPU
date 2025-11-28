@@ -46,6 +46,8 @@ export default function Home() {
   const [ticketCategory, setTicketCategory] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] =
+    useState(false);
   const totalPrice = qty * ticketPrice;
 
   const decrease = () => {
@@ -128,17 +130,28 @@ export default function Home() {
     return categoryMap[category] || category;
   };
 
-  const handleSubmit = async () => {
-    // Validasi form
+  const validateOrderData = () => {
     if (!formData.name || !formData.email || !formData.whatsapp) {
       setSubmitError("Mohon lengkapi semua field");
-      return;
+      return false;
     }
 
     if (!selectedDates.length) {
       setSubmitError("Mohon pilih tanggal");
-      return;
+      return false;
     }
+
+    setSubmitError(null);
+    return true;
+  };
+
+  const handleOpenConfirmation = () => {
+    if (!validateOrderData()) return;
+    setIsConfirmationDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!validateOrderData()) return;
 
     setIsSubmitting(true);
     setSubmitError(null);
@@ -146,9 +159,9 @@ export default function Home() {
     try {
       const selectedDate = selectedDates[0]; // Ambil tanggal pertama yang dipilih
       const eventId = getEventId(ticketCategory, selectedDate);
+      const dateTicket = formatDateTicket(selectedDate);
       const typeTicket = formatTicketType(ticketCategory);
 
-      // Payload sesuai dengan yang di Postman (tanpa date_ticket)
       const payload = {
         name: formData.name,
         email: formData.email,
@@ -156,6 +169,7 @@ export default function Home() {
         type_ticket: typeTicket,
         qty: qty,
         event_id: eventId,
+        date_ticket: dateTicket,
       };
 
       const response = await fetch("/api/participant", {
@@ -176,6 +190,7 @@ export default function Home() {
 
       // Reset form setelah berhasil
       setIsContactDialogOpen(false);
+      setIsConfirmationDialogOpen(false);
       setFormData({ name: "", email: "", whatsapp: "" });
       setSelectedDates([]);
       setTicketCategory("");
@@ -477,6 +492,7 @@ export default function Home() {
         </div>
       </div>
 
+    {/* Popup */}
       {/* Popup Select Date */}
       <Dialog open={isDateDialogOpen}>
         <DialogContent
@@ -540,6 +556,17 @@ export default function Home() {
           className="max-w-[390px] w-[370px] sm:-ml-1.5 rounded-2xl text-white border-none max-h-[80vh] overflow-y-auto 
           bg-linear-to-b from-[#1E4492] to-[#399BDA]"
         >
+          <button
+            type="button"
+            onClick={() => {
+              setIsContactDialogOpen(false);
+              setIsDateDialogOpen(true);
+            }}
+            className="absolute top-4 left-4 size-9 rounded-full bg-white/20 text-white text-lg font-bold hover:bg-white/40 transition"
+            aria-label="Kembali"
+          >
+            ←
+          </button>
           <DialogClose
             onClick={() => setIsContactDialogOpen(false)}
             className="absolute top-4 right-4 size-9 rounded-full bg-white/20 text-white font-bold hover:bg-white/40 transition"
@@ -555,12 +582,12 @@ export default function Home() {
                 className="w-auto h-auto max-w-full"
               />
             </div>
-            <p className="text-center text-xs text-white/90 mb-4">
+            <p className="text-center text-xs text-white/90 p-10 -mt-10">
               Make sure the number and email you input can be contacted
             </p>
           </DialogHeader>
 
-          <div className="space-y-5">
+          <div className="space-y-5 -mt-5">
             {/* Name Input */}
             <div className="space-y-2">
               <Label className="text-white font-semibold">NAME:</Label>
@@ -638,16 +665,111 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Payment Button */}
               <button
                 type="button"
-                onClick={handleSubmit}
-                disabled={!ticketPrice || isSubmitting || !formData.name || !formData.email || !formData.whatsapp}
+                onClick={handleOpenConfirmation}
+                disabled={
+                  !ticketPrice ||
+                  isSubmitting ||
+                  !formData.name ||
+                  !formData.email ||
+                  !formData.whatsapp ||
+                  !selectedDates.length
+                }
                 className="flex w-full mt-8 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-3 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg"
               >
                 <span>{isSubmitting ? "Processing..." : "Payment"}</span>
-                <span>total: {formatCurrency(totalPrice)}</span>
+                <span>Total: {formatCurrency(totalPrice)}</span>
               </button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Popup Konfirmasi */}
+      <Dialog open={isConfirmationDialogOpen}>
+        <DialogContent
+          showCloseButton={false}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          className="max-w-[390px] w-[370px] sm:-ml-1.5 rounded-2xl text-white border-none max-h-[80vh] overflow-y-auto bg-[#FF4808]"
+        >
+          <button
+            type="button"
+            onClick={() => setIsConfirmationDialogOpen(false)}
+            className="absolute top-4 left-4 size-9 rounded-full bg-white/20 text-white text-lg font-bold hover:bg-white/40 transition"
+            aria-label="Kembali"
+          >
+            ←
+          </button>
+          <DialogClose
+            onClick={() => setIsConfirmationDialogOpen(false)}
+            className="absolute top-4 right-4 size-9 rounded-full bg-white/20 text-white font-bold hover:bg-white/40 transition"
+          >
+            ×
+          </DialogClose>
+
+          <DialogHeader>
+            <div className="flex justify-center mb-2 mt-5">
+              <img
+                src="/images/konfirmasi.png"
+                alt="Please re-confirm"
+                className="w-64 max-w-full"
+              />
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm font-semibold">
+            <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
+              <span className="text-white/70">Name</span>
+              <span className="text-right">{formData.name || "-"}</span>
+            </div>
+            <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
+              <span className="text-white/70">Email</span>
+              <span className="text-right">{formData.email || "-"}</span>
+            </div>
+            <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
+              <span className="text-white/70">WhatsApp</span>
+              <span className="text-right">{formData.whatsapp || "-"}</span>
+            </div>
+            <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
+              <span className="text-white/70">Type Ticket</span>
+              <span className="text-right">
+                {ticketCategory ? formatTicketType(ticketCategory) : "-"}
+              </span>
+            </div>
+            <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
+              <span className="text-white/70">Date</span>
+              <span className="text-right">
+                {selectedDates.length ? formatDateTicket(selectedDates[0]) : "-"}
+              </span>
+            </div>
+            <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
+              <span className="text-white/70">Quantity</span>
+              <span className="text-right">{qty}</span>
+            </div>
+            <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/10">
+              <span className="text-white/70">Total Paid</span>
+              <span className="text-right text-lg text-yellow-300">
+                Rp {formatCurrency(totalPrice)}
+              </span>
+            </div>
+
+            {submitError && (
+              <div className="mt-2 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
+                {submitError}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="w-full bg-yellow-400 text-black font-bold text-lg py-4 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50 mt-5"
+            >
+              {isSubmitting ? "Processing..." : "Confirm & Pay"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
