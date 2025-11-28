@@ -48,6 +48,11 @@ export default function Home() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] =
     useState(false);
+  const [isLoadingContinue, setIsLoadingContinue] = useState(false);
+  const [participantData, setParticipantData] = useState<{
+    id: number;
+    order_id: string;
+  } | null>(null);
   const totalPrice = qty * ticketPrice;
 
   const decrease = () => {
@@ -66,6 +71,7 @@ export default function Home() {
     setTicketCategory(category);
     setQty(1);
     setSelectedDates([]);
+    setParticipantData(null);
     setIsDateDialogOpen(true);
   };
 
@@ -152,12 +158,18 @@ export default function Home() {
 
   const handleSubmit = async () => {
     if (!validateOrderData()) return;
+    if (!participantData?.order_id) {
+      setSubmitError(
+        "Order ID tidak ditemukan. Silakan ulangi pemilihan tanggal terlebih dahulu."
+      );
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError(null);
 
     try {
-      const selectedDate = selectedDates[0]; // Ambil tanggal pertama yang dipilih
+      const selectedDate = selectedDates[0];
       const eventId = getEventId(ticketCategory, selectedDate);
       const dateTicket = formatDateTicket(selectedDate);
       const typeTicket = formatTicketType(ticketCategory);
@@ -170,14 +182,68 @@ export default function Home() {
         qty: qty,
         event_id: eventId,
         date_ticket: dateTicket,
+        total_paid: totalPrice,
       };
+
+      const response = await fetch(`/api/participant/${participantData.order_id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Gagal mengkonfirmasi pembayaran");
+      }
+
+      const data = await response.json();
+      console.log("Participant updated:", data);
+
+      setIsContactDialogOpen(false);
+      setIsConfirmationDialogOpen(false);
+      setFormData({ name: "", email: "", whatsapp: "" });
+      setSelectedDates([]);
+      setTicketCategory("");
+      setTicketPrice(0);
+      setQty(1);
+      setSubmitError(null);
+      setParticipantData(null);
+
+      alert("Pembayaran berhasil dikonfirmasi!");
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan saat mengirim data"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleProceedToContact = async () => {
+    if (!selectedDates.length) return;
+
+    setIsLoadingContinue(true);
+    setSubmitError(null);
+    setParticipantData(null);
+
+    try {
+      const selectedDate = selectedDates[0];
+      const eventId = getEventId(ticketCategory, selectedDate);
+
+      // Log untuk debugging: pastikan event_id sesuai dengan mapping
+      console.log(`Category: ${ticketCategory}, Date: ${selectedDate}, Event ID: ${eventId}`);
 
       const response = await fetch("/api/participant", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ event_id: eventId }),
       });
 
       if (!response.ok) {
@@ -188,32 +254,26 @@ export default function Home() {
       const data = await response.json();
       console.log("Participant created:", data);
 
-      // Reset form setelah berhasil
-      setIsContactDialogOpen(false);
-      setIsConfirmationDialogOpen(false);
-      setFormData({ name: "", email: "", whatsapp: "" });
-      setSelectedDates([]);
-      setTicketCategory("");
-      setTicketPrice(0);
-      setQty(1);
-      setSubmitError(null);
+      // Simpan data response (id dan order_id)
+      if (data.id && data.order_id) {
+        setParticipantData({
+          id: data.id,
+          order_id: data.order_id,
+        });
+      }
 
-      // Bisa tambahkan notifikasi sukses di sini
-      alert("Pesanan berhasil dibuat!");
+      setIsDateDialogOpen(false);
+      setIsContactDialogOpen(true);
     } catch (error) {
-      console.error("Error submitting form:", error);
+      console.error("Error creating participant:", error);
       setSubmitError(
-        error instanceof Error ? error.message : "Terjadi kesalahan saat mengirim data"
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan saat membuat participant"
       );
     } finally {
-      setIsSubmitting(false);
+      setIsLoadingContinue(false);
     }
-  };
-
-  const handleProceedToContact = () => {
-    if (!selectedDates.length) return;
-    setIsDateDialogOpen(false);
-    setIsContactDialogOpen(true);
   };
 
   return (
@@ -535,13 +595,19 @@ export default function Home() {
             </div>
             <p className="text-center text-sm text-white/80">February 2026</p>
 
+            {submitError && (
+              <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
+                {submitError}
+              </div>
+            )}
+
             <Button
               type="button"
               onClick={handleProceedToContact}
-              disabled={!selectedDates.length}
+              disabled={!selectedDates.length || isLoadingContinue}
               className="w-full bg-yellow-400 text-black font-bold text-lg py-5 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50"
             >
-              Continue
+              {isLoadingContinue ? "Processing..." : "Continue"}
             </Button>
           </div>
         </DialogContent>
@@ -556,17 +622,6 @@ export default function Home() {
           className="max-w-[390px] w-[370px] sm:-ml-1.5 rounded-2xl text-white border-none max-h-[80vh] overflow-y-auto 
           bg-linear-to-b from-[#1E4492] to-[#399BDA]"
         >
-          <button
-            type="button"
-            onClick={() => {
-              setIsContactDialogOpen(false);
-              setIsDateDialogOpen(true);
-            }}
-            className="absolute top-4 left-4 size-9 rounded-full bg-white/20 text-white text-lg font-bold hover:bg-white/40 transition"
-            aria-label="Kembali"
-          >
-            ←
-          </button>
           <DialogClose
             onClick={() => setIsContactDialogOpen(false)}
             className="absolute top-4 right-4 size-9 rounded-full bg-white/20 text-white font-bold hover:bg-white/40 transition"
