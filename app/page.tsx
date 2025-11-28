@@ -645,7 +645,7 @@ export default function Home() {
                 className="flex w-full mt-8 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-3 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg"
               >
                 <span>{isSubmitting ? "Processing..." : "Payment"}</span>
-                <span>Total: {formatCurrency(totalPrice)}</span>
+                <span>total: {formatCurrency(totalPrice)}</span>
               </button>
             </div>
           </div>
