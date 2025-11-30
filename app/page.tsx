@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { QRCodeSVG } from "qrcode.react";
 
 interface StarDividerProps {
   content: string;
@@ -53,7 +55,50 @@ export default function Home() {
     id: number;
     order_id: string;
   } | null>(null);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [remainingTime, setRemainingTime] = useState(15 * 60); // 15 minutes in seconds
+  const [qrCode, setQrCode] = useState<string>("");
+  const [isCompletingPayment, setIsCompletingPayment] = useState(false);
   const totalPrice = qty * ticketPrice;
+
+  // Hitung menit dan detik untuk countdown payment
+  const paymentMinutes = String(Math.floor(remainingTime / 60)).padStart(
+    2,
+    "0"
+  );
+  const paymentSeconds = String(remainingTime % 60).padStart(2, "0");
+
+  // Reset semua state setelah pembayaran selesai
+  const resetAllStates = () => {
+    setFormData({ name: "", email: "", whatsapp: "" });
+    setSelectedDates([]);
+    setTicketCategory("");
+    setTicketPrice(0);
+    setQty(1);
+    setSubmitError(null);
+    setParticipantData(null);
+    setQrCode("");
+  };
+
+  // Jalankan countdown ketika popup payment dibuka
+  useEffect(() => {
+    if (!isPaymentDialogOpen) return;
+
+    // Reset timer ke 30 menit setiap kali popup dibuka
+    setRemainingTime(15 * 60);
+
+    const interval = setInterval(() => {
+      setRemainingTime((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isPaymentDialogOpen]);
 
   const decrease = () => {
     setQty((prev) => Math.max(1, prev - 1));
@@ -156,6 +201,51 @@ export default function Home() {
     setIsConfirmationDialogOpen(true);
   };
 
+  const handlePaymentCompleted = async () => {
+    if (!participantData?.order_id) {
+      setSubmitError("Order ID tidak ditemukan");
+      return;
+    }
+
+    setIsCompletingPayment(true);
+    setSubmitError(null);
+
+    try {
+      const response = await fetch(
+        `/api/callback-payment/${participantData.order_id}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Gagal memverifikasi pembayaran");
+      }
+
+      const data = await response.json();
+
+      // Tutup popup dan reset state
+      setIsPaymentDialogOpen(false);
+      resetAllStates();
+
+      // Tampilkan pesan sukses
+      alert(data.message || "Pembayaran berhasil diverifikasi!");
+    } catch (error) {
+      console.error("Error completing payment:", error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan saat memverifikasi pembayaran"
+      );
+    } finally {
+      setIsCompletingPayment(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!validateOrderData()) return;
     if (!participantData?.order_id) {
@@ -199,19 +289,15 @@ export default function Home() {
       }
 
       const data = await response.json();
-      console.log("Participant updated:", data);
+
+      // Simpan qr_code dari response
+      if (data.qr_code) {
+        setQrCode(data.qr_code);
+      }
 
       setIsContactDialogOpen(false);
       setIsConfirmationDialogOpen(false);
-      setFormData({ name: "", email: "", whatsapp: "" });
-      setSelectedDates([]);
-      setTicketCategory("");
-      setTicketPrice(0);
-      setQty(1);
-      setSubmitError(null);
-      setParticipantData(null);
-
-      alert("Pembayaran berhasil dikonfirmasi!");
+      setIsPaymentDialogOpen(true);
     } catch (error) {
       console.error("Error submitting form:", error);
       setSubmitError(
@@ -235,9 +321,6 @@ export default function Home() {
       const selectedDate = selectedDates[0];
       const eventId = getEventId(ticketCategory, selectedDate);
 
-      // Log untuk debugging: pastikan event_id sesuai dengan mapping
-      console.log(`Category: ${ticketCategory}, Date: ${selectedDate}, Event ID: ${eventId}`);
-
       const response = await fetch("/api/participant", {
         method: "POST",
         headers: {
@@ -252,7 +335,6 @@ export default function Home() {
       }
 
       const data = await response.json();
-      console.log("Participant created:", data);
 
       // Simpan data response (id dan order_id)
       if (data.id && data.order_id) {
@@ -571,9 +653,9 @@ export default function Home() {
             <DialogTitle className="text-center text-2xl font-bold text-yellow-400 mb-2">
               Select Date(s)
             </DialogTitle>
-            <p className="text-center text-xs text-white/90 mb-6">
+            <DialogDescription className="text-center text-xs text-white/90 mb-6">
               Please choose one date before continuing
-            </p>
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5">
@@ -637,9 +719,9 @@ export default function Home() {
                 className="w-auto h-auto max-w-full"
               />
             </div>
-            <p className="text-center text-xs text-white/90 p-10 -mt-10">
+            <DialogDescription className="text-center text-xs text-white/90 p-10 -mt-10">
               Make sure the number and email you input can be contacted
-            </p>
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 -mt-5">
@@ -766,6 +848,10 @@ export default function Home() {
           </DialogClose>
 
           <DialogHeader>
+            <DialogTitle className="sr-only">Konfirmasi Pesanan</DialogTitle>
+            <DialogDescription className="sr-only">
+              Konfirmasi detail pesanan sebelum melanjutkan pembayaran
+            </DialogDescription>
             <div className="flex justify-center mb-2 mt-5">
               <img
                 src="/images/konfirmasi.png"
@@ -825,6 +911,128 @@ export default function Home() {
             >
               {isSubmitting ? "Processing..." : "Confirm & Pay"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Popup Payment */}
+      <Dialog open={isPaymentDialogOpen}>
+        <DialogContent
+          showCloseButton={false}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          className="max-w-[390px] w-[370px] sm:-ml-1.5 rounded-3xl text-white border-none max-h-[80vh] overflow-y-auto bg-[#FFC21E] px-0 pb-8"
+        >
+          <DialogHeader>
+            <DialogTitle className="sr-only">Pembayaran</DialogTitle>
+            <DialogDescription className="sr-only">
+              Lengkapi pembayaran dengan memindai QR code atau transfer sesuai instruksi
+            </DialogDescription>
+          </DialogHeader>
+          {/* Header Payment */}
+          <div className="flex flex-col items-center pt-6 pb-4">
+            <img
+              src="/images/payment.png"
+              alt="Payment"
+              className="h-12 w-auto drop-shadow-[0_4px_0_rgba(0,0,0,0.6)]"
+            />
+            <p className="mt-3 text-xs font-semibold text-black/80">
+              Complete payment before:
+            </p>
+          </div>
+
+          {/* Orange Card with QR & Timer */}
+          <div className="mx-6 rounded-3xl bg-[#FF4808] px-4 pt-6 pb-5 shadow-lg shadow-[#FF4808]/50">
+            <div className="text-center text-3xl font-black text-white tracking-[0.2em] mb-4">
+              {paymentMinutes}:{paymentSeconds}
+            </div>
+
+            <div className="mx-auto mb-4 flex items-center justify-center rounded-2xl bg-white p-3">
+              {/* QR Code */}
+              {qrCode ? (
+                <QRCodeSVG
+                  value={qrCode}
+                  size={208}
+                  level="H"
+                  includeMargin={false}
+                />
+              ) : (
+                <div className="h-52 w-52 bg-gray-200 rounded-xl flex items-center justify-center">
+                  <span className="text-gray-400 text-xs">Loading QR Code...</span>
+                </div>
+              )}
+            </div>
+
+            <p className="mt-2 text-center text-xs font-semibold text-white">
+              Order ID:{" "}
+              <span className="font-bold">
+                {participantData?.order_id || "-"}
+              </span>
+            </p>
+          </div>
+
+          {/* Order Detail Card */}
+          <div className="mx-6 mt-4 rounded-3xl bg-[#0042A6] px-5 py-5 text-xs font-semibold shadow-md shadow-black/20">
+            <p className="text-sm font-black tracking-wide mb-4">ORDER DETAIL</p>
+
+            <div className="space-y-2 text-[11px]">
+              <div className="flex justify-between gap-4">
+                <span className="text-white/80">NAME:</span>
+                <span className="text-right text-white">
+                  {formData.name || "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-white/80">EMAIL:</span>
+                <span className="text-right text-white">
+                  {formData.email || "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-white/80">WHATSAPP NUMBER:</span>
+                <span className="text-right text-white">
+                  {formData.whatsapp || "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-white/80">TICKET:</span>
+                <span className="text-right text-white">
+                  {ticketCategory ? formatTicketType(ticketCategory) : "-"}
+                  {qty ? ` - ${qty} Ticket(s)` : ""}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-white/80">DATE:</span>
+                <span className="text-right text-white">
+                  {selectedDates.length ? formatDateTicket(selectedDates[0]) : "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 pt-1 border-t border-white/20 mt-2">
+                <span className="text-white/80">TOTAL:</span>
+                <span className="text-right text-white">
+                  Rp {formatCurrency(totalPrice)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {submitError && (
+            <div className="mx-6 mt-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
+              {submitError}
+            </div>
+          )}
+
+          {/* Payment Completed Button */}
+          <div className="mt-6 flex justify-center">
+            <button
+              type="button"
+              onClick={handlePaymentCompleted}
+              disabled={isCompletingPayment || !participantData?.order_id}
+              className="w-[80%] rounded-2xl bg-[#FF4808] py-3 text-center text-base font-bold text-white shadow-md shadow-[#FF4808]/40 hover:bg-[#e13c01] active:translate-y-0.5 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isCompletingPayment ? "Verifying..." : "Payment Completed"}
+            </button>
           </div>
         </DialogContent>
       </Dialog>
