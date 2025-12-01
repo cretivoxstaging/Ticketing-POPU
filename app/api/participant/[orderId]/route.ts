@@ -38,7 +38,6 @@ export async function PUT(
       "email",
       "whatsapp",
       "type_ticket",
-      "qty",
       "event_id",
     ] as const;
 

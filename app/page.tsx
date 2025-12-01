@@ -34,6 +34,14 @@ const StarDivider = ({
   </div>
 );
 
+type EventStatus = {
+  event_id: number;
+  remaining: number;
+  waiting: number;
+  waitingRoomFull: boolean;
+  soldOut: boolean;
+};
+
 export default function Home() {
   const [qty, setQty] = useState(1);
   const [isDateDialogOpen, setIsDateDialogOpen] = useState(false);
@@ -56,17 +64,17 @@ export default function Home() {
     order_id: string;
   } | null>(null);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [remainingTime, setRemainingTime] = useState(15 * 60); // 15 minutes in seconds
+  const [remainingTime, setRemainingTime] = useState(10 * 60); // 10 minutes in seconds
   const [qrCode, setQrCode] = useState<string>("");
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
+  const [eventStatuses, setEventStatuses] = useState<Record<number, EventStatus>>({});
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [isStatusLoading, setIsStatusLoading] = useState(false);
   const totalPrice = qty * ticketPrice;
 
-  // Hitung menit dan detik untuk countdown payment
-  const paymentMinutes = String(Math.floor(remainingTime / 60)).padStart(
-    2,
-    "0"
-  );
-  const paymentSeconds = String(remainingTime % 60).padStart(2, "0");
+  // Hitung menit dan detik untuk countdown timer
+  const timerMinutes = String(Math.floor(remainingTime / 60)).padStart(2, "0");
+  const timerSeconds = String(remainingTime % 60).padStart(2, "0");
 
   // Reset semua state setelah pembayaran selesai
   const resetAllStates = () => {
@@ -80,12 +88,25 @@ export default function Home() {
     setQrCode("");
   };
 
-  // Jalankan countdown ketika popup payment dibuka
+  // Jalankan countdown ketika popup information dibuka dan berlanjut ke popup berikutnya
   useEffect(() => {
-    if (!isPaymentDialogOpen) return;
+    // Timer dimulai saat popup information dibuka
+    if (
+      !isContactDialogOpen &&
+      !isConfirmationDialogOpen &&
+      !isPaymentDialogOpen
+    ) {
+      return;
+    }
 
-    // Reset timer ke 30 menit setiap kali popup dibuka
-    setRemainingTime(15 * 60);
+    // Reset timer ke 10 menit hanya saat popup information pertama kali dibuka
+    if (
+      isContactDialogOpen &&
+      !isConfirmationDialogOpen &&
+      !isPaymentDialogOpen
+    ) {
+      setRemainingTime(10 * 60);
+    }
 
     const interval = setInterval(() => {
       setRemainingTime((prev) => {
@@ -98,7 +119,7 @@ export default function Home() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPaymentDialogOpen]);
+  }, [isContactDialogOpen, isConfirmationDialogOpen, isPaymentDialogOpen]);
 
   const decrease = () => {
     setQty((prev) => Math.max(1, prev - 1));
@@ -111,6 +132,35 @@ export default function Home() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("id-ID").format(value);
 
+  const fetchEventStatuses = async () => {
+    setIsStatusLoading(true);
+    setStatusError(null);
+    try {
+      const response = await fetch("/api/participant/status");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Gagal memuat status tiket");
+      }
+      const data = await response.json();
+      if (Array.isArray(data.data)) {
+        const statusMap: Record<number, EventStatus> = {};
+        data.data.forEach((status: EventStatus) => {
+          statusMap[status.event_id] = status;
+        });
+        setEventStatuses(statusMap);
+      }
+    } catch (error) {
+      console.error("Error fetching event statuses:", error);
+      setStatusError(
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan saat memuat status tiket"
+      );
+    } finally {
+      setIsStatusLoading(false);
+    }
+  };
+
   const handleBuyClick = (price: number, category: string) => {
     setTicketPrice(price);
     setTicketCategory(category);
@@ -118,6 +168,7 @@ export default function Home() {
     setSelectedDates([]);
     setParticipantData(null);
     setIsDateDialogOpen(true);
+    fetchEventStatuses();
   };
 
   const handleDateToggle = (date: number) => {
@@ -179,6 +230,11 @@ export default function Home() {
       "NORMAL TICKET": "Normal Ticket",
     };
     return categoryMap[category] || category;
+  };
+
+  const getStatusByDate = (category: string, date: number) => {
+    const eventId = getEventId(category, date);
+    return eventStatuses[eventId];
   };
 
   const validateOrderData = () => {
@@ -269,7 +325,6 @@ export default function Home() {
         email: formData.email,
         whatsapp: formData.whatsapp,
         type_ticket: typeTicket,
-        qty: qty,
         event_id: eventId,
         date_ticket: dateTicket,
         total_paid: totalPrice,
@@ -326,7 +381,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ event_id: eventId }),
+        body: JSON.stringify({ event_id: eventId, qty }),
       });
 
       if (!response.ok) {
@@ -660,36 +715,94 @@ export default function Home() {
 
           <div className="space-y-5">
             <div className="flex justify-center gap-3">
-              {[6, 7, 8].map((date) => (
-                <button
-                  key={date}
-                  type="button"
-                  onClick={() => handleDateToggle(date)}
-                  className={`w-16 h-16 rounded-xl font-black text-2xl transition-all ${
-                    selectedDates.includes(date)
-                      ? "bg-orange-500 text-white shadow-lg shadow-orange-500/40"
-                      : "bg-white text-gray-600"
-                  }`}
-                >
-                  {date}
-                </button>
-              ))}
+              {[6, 7, 8].map((date) => {
+                const status = ticketCategory
+                  ? getStatusByDate(ticketCategory, date)
+                  : null;
+                const isSoldOut = status?.soldOut;
+                return (
+                  <div key={date} className="flex flex-col items-center">
+                    <button
+                      type="button"
+                      onClick={() => handleDateToggle(date)}
+                      disabled={isSoldOut || isStatusLoading}
+                      className={`w-16 h-16 rounded-xl font-black text-2xl transition-all ${
+                        selectedDates.includes(date)
+                          ? "bg-[#FF4808] text-white shadow-lg shadow-orange-500/40"
+                          : isSoldOut
+                          ? "bg-gray-400/80 text-white cursor-not-allowed"
+                          : "bg-[#fc8a61] text-white"
+                      }`}
+                    >
+                      {date}
+                    </button>
+                    {isSoldOut && (
+                      <span className="mt-1 text-[10px] uppercase tracking-wide text-white">
+                        Full
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <p className="text-center text-sm text-white/80">February 2026</p>
 
-            {submitError && (
+            {statusError && (
               <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
-                {submitError}
+                {statusError}
               </div>
             )}
+
+            {/* Price + Quantity + Total */}
+            <div className="rounded-3xl p-4 text-white space-y-3 border border-white/20">
+              <div className="text-center text-base font-semibold">
+                {ticketCategory ? `${ticketCategory} - Price:` : "Price:"}{" "}
+                {ticketPrice ? formatCurrency(ticketPrice) : "-"}
+              </div>
+              <div className="flex items-center justify-center gap-5">
+                <button
+                  type="button"
+                  onClick={decrease}
+                  disabled={isLoadingContinue}
+                  className="size-10 rounded-full bg-[#F5B045] text-black text-2xl font-bold leading-none shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  -
+                </button>
+                <span className="text-3xl font-black text-white">{qty}</span>
+                <button
+                  type="button"
+                  onClick={increase}
+                  disabled={isLoadingContinue}
+                  className="size-10 rounded-full bg-yellow-400 text-black text-2xl font-bold leading-none shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  +
+                </button>
+              </div>
+              {/* <div className="text-center text-sm">
+                Total: Rp {formatCurrency(totalPrice)}
+              </div> */}
+
+              {submitError && (
+                <div className="mt-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
+                  {submitError}
+                </div>
+              )}
+            </div>
 
             <Button
               type="button"
               onClick={handleProceedToContact}
-              disabled={!selectedDates.length || isLoadingContinue}
-              className="w-full bg-yellow-400 text-black font-bold text-lg py-5 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50"
+              disabled={!selectedDates.length || isLoadingContinue || isStatusLoading}
+              className="flex w-full mt-4 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-5 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg"
             >
-              {isLoadingContinue ? "Processing..." : "Continue"}
+              <span>
+                {isStatusLoading
+                  ? "Checking availability..."
+                  : isLoadingContinue
+                  ? "Processing..."
+                  : "Payment"}
+              </span>
+              <span>Total: {formatCurrency(totalPrice)}</span>
             </Button>
           </div>
         </DialogContent>
@@ -712,7 +825,7 @@ export default function Home() {
           </DialogClose>
           <DialogHeader>
             <DialogTitle className="sr-only">CONTACT INFORMATION</DialogTitle>
-            <div className="flex justify-center mb-2">
+            <div className="flex justify-center mb-2 mt-5">
               <img
                 src="/images/informasi.png"
                 alt="CONTACT INFORMATION"
@@ -722,6 +835,11 @@ export default function Home() {
             <DialogDescription className="text-center text-xs text-white/90 p-10 -mt-10">
               Make sure the number and email you input can be contacted
             </DialogDescription>
+            <div className="flex justify-center -mt-10 mb-10">
+              <div className="text-center text-2xl font-black text-yellow-400 tracking-[0.2em]">
+                {timerMinutes}:{timerSeconds}
+              </div>
+            </div>
           </DialogHeader>
 
           <div className="space-y-5 -mt-5">
@@ -769,57 +887,29 @@ export default function Home() {
               />
             </div>
 
-            {/* Price + Qty + Total */}
-            <div className="rounded-3xl p-4 text-white space-y-3 border border-white/20">
-              <div className="text-center text-base font-semibold">
-                {ticketCategory ? `${ticketCategory} - Price:` : "Price:"}{" "}
-                {ticketPrice ? formatCurrency(ticketPrice) : "-"}
+            {/* Error Message */}
+            {submitError && (
+              <div className="mt-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
+                {submitError}
               </div>
-              <div className="flex items-center justify-center gap-5">
-                <button
-                  type="button"
-                  onClick={decrease}
-                  disabled={isSubmitting}
-                  className="size-10 rounded-full bg-[#F5B045] text-black text-2xl font-bold leading-none shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  -
-                </button>
-                <span className="text-3xl font-black text-white">{qty}</span>
-                <button
-                  type="button"
-                  onClick={increase}
-                  disabled={isSubmitting}
-                  className="size-10 rounded-full bg-yellow-400 text-black text-2xl font-bold leading-none shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  +
-                </button>
-              </div>
-              
-              {/* Error Message */}
-              {submitError && (
-                <div className="mt-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
-                  {submitError}
-                </div>
-              )}
+            )}
 
-              {/* Payment Button */}
-              <button
-                type="button"
-                onClick={handleOpenConfirmation}
-                disabled={
-                  !ticketPrice ||
-                  isSubmitting ||
-                  !formData.name ||
-                  !formData.email ||
-                  !formData.whatsapp ||
-                  !selectedDates.length
-                }
-                className="flex w-full mt-8 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-3 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg"
-              >
-                <span>{isSubmitting ? "Processing..." : "Payment"}</span>
-                <span>Total: {formatCurrency(totalPrice)}</span>
-              </button>
-            </div>
+            {/* Payment Button */}
+            <button
+              type="button"
+              onClick={handleOpenConfirmation}
+              disabled={
+                !ticketPrice ||
+                isSubmitting ||
+                !formData.name ||
+                !formData.email ||
+                !formData.whatsapp ||
+                !selectedDates.length
+              }
+              className="w-full bg-yellow-400 text-black font-bold text-lg py-2 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50 mt-5 mb-5"
+            >
+              <span>{isSubmitting ? "Processing..." : "Submit"}</span>
+            </button>
           </div>
         </DialogContent>
       </Dialog>
@@ -849,15 +939,20 @@ export default function Home() {
 
           <DialogHeader>
             <DialogTitle className="sr-only">Konfirmasi Pesanan</DialogTitle>
-            <DialogDescription className="sr-only">
-              Konfirmasi detail pesanan sebelum melanjutkan pembayaran
-            </DialogDescription>
             <div className="flex justify-center mb-2 mt-5">
               <img
                 src="/images/konfirmasi.png"
                 alt="Please re-confirm"
                 className="w-64 max-w-full"
               />
+            </div>
+            <DialogDescription className="text-center text-xs text-white/90 p-10 -mt-10">
+             Confirm your order before payment
+            </DialogDescription>
+            <div className="flex justify-center -mt-10 mb-5">
+              <div className="text-center text-2xl font-black text-yellow-300 tracking-[0.2em]">
+                {timerMinutes}:{timerSeconds}
+              </div>
             </div>
           </DialogHeader>
 
@@ -907,7 +1002,7 @@ export default function Home() {
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="w-full bg-yellow-400 text-black font-bold text-lg py-4 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50 mt-5"
+              className="w-full bg-yellow-400 text-black font-bold text-lg py-4 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50 mt-5 mb-5"
             >
               {isSubmitting ? "Processing..." : "Confirm & Pay"}
             </Button>
@@ -930,23 +1025,23 @@ export default function Home() {
             </DialogDescription>
           </DialogHeader>
           {/* Header Payment */}
-          <div className="flex flex-col items-center pt-6 pb-4">
+          <div className="flex flex-col items-center pt-4 pb-4">
             <img
               src="/images/payment.png"
               alt="Payment"
               className="h-12 w-auto drop-shadow-[0_4px_0_rgba(0,0,0,0.6)]"
             />
-            <p className="mt-3 text-xs font-semibold text-black/80">
+            
+            <p className="mt-2 text-xs font-semibold text-black/80">
               Complete payment before:
             </p>
+            <div className="mt-3 text-center text-3xl font-black text-black tracking-[0.2em]">
+              {timerMinutes}:{timerSeconds}
+            </div>
           </div>
 
           {/* Orange Card with QR & Timer */}
           <div className="mx-6 rounded-3xl bg-[#FF4808] px-4 pt-6 pb-5 shadow-lg shadow-[#FF4808]/50">
-            <div className="text-center text-3xl font-black text-white tracking-[0.2em] mb-4">
-              {paymentMinutes}:{paymentSeconds}
-            </div>
-
             <div className="mx-auto mb-4 flex items-center justify-center rounded-2xl bg-white p-3">
               {/* QR Code */}
               {qrCode ? (

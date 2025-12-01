@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { event_id } = body;
+    const { event_id, qty } = body;
 
     if (!event_id) {
       return NextResponse.json(
@@ -80,9 +80,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prepare payload sesuai API yang di gambar: hanya event_id
+    if (!qty) {
+      return NextResponse.json(
+        { error: "qty is required" },
+        { status: 400 }
+      );
+    }
+
+    // Payload ke API eksternal
     const payload = {
-      event_id: event_id,
+      event_id,
+      qty,
     };
 
     const response = await fetch(API_URL, {
