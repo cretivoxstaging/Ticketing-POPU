@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Dialog,
   DialogClose,
@@ -70,6 +70,7 @@ export default function Home() {
   const [eventStatuses, setEventStatuses] = useState<Record<number, EventStatus>>({});
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(false);
+  const timerInitializedRef = useRef(false);
   const totalPrice = qty * ticketPrice;
 
   // Hitung menit dan detik untuk countdown timer
@@ -86,6 +87,7 @@ export default function Home() {
     setSubmitError(null);
     setParticipantData(null);
     setQrCode("");
+    timerInitializedRef.current = false; // Reset timer untuk proses baru
   };
 
   // Jalankan countdown ketika popup information dibuka dan berlanjut ke popup berikutnya
@@ -96,22 +98,33 @@ export default function Home() {
       !isConfirmationDialogOpen &&
       !isPaymentDialogOpen
     ) {
+      // Reset flag saat semua popup tertutup
+      timerInitializedRef.current = false;
       return;
     }
 
     // Reset timer ke 10 menit hanya saat popup information pertama kali dibuka
+    // dan timer belum pernah diinisialisasi
     if (
       isContactDialogOpen &&
       !isConfirmationDialogOpen &&
-      !isPaymentDialogOpen
+      !isPaymentDialogOpen &&
+      !timerInitializedRef.current
     ) {
       setRemainingTime(10 * 60);
+      timerInitializedRef.current = true;
     }
 
     const interval = setInterval(() => {
       setRemainingTime((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+          // Tutup semua popup ketika timer habis
+          setIsDateDialogOpen(false);
+          setIsContactDialogOpen(false);
+          setIsConfirmationDialogOpen(false);
+          setIsPaymentDialogOpen(false);
+          timerInitializedRef.current = false;
           return 0;
         }
         return prev - 1;
@@ -167,6 +180,7 @@ export default function Home() {
     setQty(1);
     setSelectedDates([]);
     setParticipantData(null);
+    timerInitializedRef.current = false; // Reset timer untuk proses baru
     setIsDateDialogOpen(true);
     fetchEventStatuses();
   };
@@ -690,13 +704,13 @@ export default function Home() {
       </div>
 
     {/* Popup */}
-      {/* Popup Select Date */}
+      {/* Popup Selection */}
       <Dialog open={isDateDialogOpen}>
         <DialogContent
           showCloseButton={false}
           onInteractOutside={(event) => event.preventDefault()}
           onEscapeKeyDown={(event) => event.preventDefault()}
-          className="max-w-[390px] w-[370px] sm:-ml-1.5 rounded-2xl text-white border-none max-h-[80vh] overflow-y-auto bg-linear-to-b from-[#1E4492] to-[#399BDA]"
+          className="max-w-[390px] w-[370px] sm:-ml-1.5 md:ml-0.5 rounded-2xl text-white border-none max-h-[80vh] overflow-y-auto bg-linear-to-b from-[#1E4492] to-[#399BDA]"
         >
           <DialogClose
             onClick={() => setIsDateDialogOpen(false)}
@@ -706,7 +720,7 @@ export default function Home() {
           </DialogClose>
           <DialogHeader>
             <DialogTitle className="text-center text-2xl font-bold text-yellow-400 mb-2">
-              Select Date(s)
+              Ticket Selection
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-white/90 mb-6">
               Please choose one date before continuing
@@ -714,38 +728,42 @@ export default function Home() {
           </DialogHeader>
 
           <div className="space-y-5">
-            <div className="flex justify-center gap-3">
+            <div className="space-y-3">
               {[6, 7, 8].map((date) => {
                 const status = ticketCategory
                   ? getStatusByDate(ticketCategory, date)
                   : null;
                 const isSoldOut = status?.soldOut;
+                const isSelected = selectedDates.includes(date);
+                const baseClasses =
+                  "w-full flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all";
+                const stateClasses = isSoldOut
+                  ? "bg-[#d9d9d9] text-gray-700 border-gray-400 cursor-not-allowed"
+                  : isSelected
+                  ? "bg-[#FF4808] text-white border-[#FF4808] shadow-lg shadow-orange-500/40"
+                  : "bg-[#FF7C63] text-white border-[#ff6c05] hover:translate-y-0.5";
                 return (
-                  <div key={date} className="flex flex-col items-center">
-                    <button
-                      type="button"
-                      onClick={() => handleDateToggle(date)}
-                      disabled={isSoldOut || isStatusLoading}
-                      className={`w-16 h-16 rounded-xl font-black text-2xl transition-all ${
-                        selectedDates.includes(date)
-                          ? "bg-[#FF4808] text-white shadow-lg shadow-orange-500/40"
-                          : isSoldOut
-                          ? "bg-gray-400/80 text-white cursor-not-allowed"
-                          : "bg-[#fc8a61] text-white"
+                  <button
+                    key={date}
+                    type="button"
+                    onClick={() => handleDateToggle(date)}
+                    disabled={isSoldOut || isStatusLoading}
+                    className={`${baseClasses} ${stateClasses}`}
+                  >
+                    <span className="text-lg font-semibold">
+                      {formatDateTicket(date)}
+                    </span>
+                    <span
+                      className={`text-sm font-semibold ${
+                        isSoldOut ? "text-gray-700" : "text-white"
                       }`}
                     >
-                      {date}
-                    </button>
-                    {isSoldOut && (
-                      <span className="mt-1 text-[10px] uppercase tracking-wide text-white">
-                        Full
-                      </span>
-                    )}
-                  </div>
+                      {isSoldOut ? "Soldout" : "Available"}
+                    </span>
+                  </button>
                 );
               })}
             </div>
-            <p className="text-center text-sm text-white/80">February 2026</p>
 
             {statusError && (
               <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm text-center">
@@ -793,7 +811,7 @@ export default function Home() {
               type="button"
               onClick={handleProceedToContact}
               disabled={!selectedDates.length || isLoadingContinue || isStatusLoading}
-              className="flex w-full mt-4 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-5 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg"
+              className="flex w-full mt-4 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-5 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg "
             >
               <span>
                 {isStatusLoading
@@ -835,7 +853,7 @@ export default function Home() {
             <DialogDescription className="text-center text-xs text-white/90 p-10 -mt-10">
               Make sure the number and email you input can be contacted
             </DialogDescription>
-            <div className="flex justify-center -mt-10 mb-10">
+            <div className="flex justify-center -mt-10 mb-7">
               <div className="text-center text-2xl font-black text-yellow-400 tracking-[0.2em]">
                 {timerMinutes}:{timerSeconds}
               </div>
@@ -906,7 +924,7 @@ export default function Home() {
                 !formData.whatsapp ||
                 !selectedDates.length
               }
-              className="w-full bg-yellow-400 text-black font-bold text-lg py-2 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50 mt-5 mb-5"
+              className="w-full bg-yellow-400 text-black font-bold text-lg py-2 rounded-xl hover:bg-yellow-500 disabled:bg-yellow-200 disabled:text-black/50 mt-7 mb-5"
             >
               <span>{isSubmitting ? "Processing..." : "Submit"}</span>
             </button>

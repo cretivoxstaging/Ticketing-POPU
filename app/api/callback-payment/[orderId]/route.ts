@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.API_URL;
-const API_TOKEN = process.env.API_TOKEN;
+const CALLBACK_URL = process.env.CALLBACK_URL;
+const CALLBACK_TOKEN = process.env.CALLBACK_TOKEN;
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { orderId: string } }
 ) {
   try {
-    if (!API_URL || !API_TOKEN) {
+    if (!CALLBACK_URL || !CALLBACK_TOKEN) {
       return NextResponse.json(
         { error: "API configuration is missing" },
         { status: 500 }
       );
     }
 
+    // Ambil orderId dari params dinamis Next.js,
+    // atau fallback dengan parsing dari URL jika params tidak tersedia.
     const paramOrderId = params?.orderId;
     const urlOrderId = (() => {
       try {
@@ -24,7 +26,9 @@ export async function GET(
         return null;
       }
     })();
+
     const orderId = paramOrderId || urlOrderId;
+
     if (!orderId) {
       return NextResponse.json(
         { error: "orderId param is required" },
@@ -32,23 +36,24 @@ export async function GET(
       );
     }
 
-    // Construct callback payment URL
-    // Get base URL by removing /participant from API_URL
-    const baseUrl = API_URL.replace("/participant", "");
-    const callbackUrl = `${baseUrl}/callback-payment/${orderId}`;
+    // Susun URL callback ke API eksternal.
+    // CALLBACK_URL di .env sudah berupa: https://api-ticketing-ecru.vercel.app/callback-payment/
+    // Jadi kita cukup menambahkan orderId saja, dan pastikan tidak ada double slash.
+    const callbackUrl = CALLBACK_URL.endsWith("/")
+      ? `${CALLBACK_URL}${orderId}`
+      : `${CALLBACK_URL}/${orderId}`;
 
     const response = await fetch(callbackUrl, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${API_TOKEN}`,
-        "Content-Type": "application/json",
+        Authorization: `Bearer ${CALLBACK_TOKEN}`,
       },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       return NextResponse.json(
-        { error: "Failed to fetch callback payment", details: errorText },
+        { error: "Please complete your payment.", details: errorText },
         { status: response.status }
       );
     }
