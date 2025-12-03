@@ -67,7 +67,12 @@ export default function Home() {
   const [remainingTime, setRemainingTime] = useState(10 * 60); // 10 minutes in seconds
   const [qrCode, setQrCode] = useState<string>("");
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
-  const [eventStatuses, setEventStatuses] = useState<Record<number, EventStatus>>({});
+  const [isPaymentNotDoneDialogOpen, setIsPaymentNotDoneDialogOpen] =
+    useState(false);
+  const [isThankYouDialogOpen, setIsThankYouDialogOpen] = useState(false);
+  const [eventStatuses, setEventStatuses] = useState<
+    Record<number, EventStatus>
+  >({});
   const [statusError, setStatusError] = useState<string | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(false);
   const timerInitializedRef = useRef(false);
@@ -88,6 +93,12 @@ export default function Home() {
     setParticipantData(null);
     setQrCode("");
     timerInitializedRef.current = false; // Reset timer untuk proses baru
+  };
+
+  // Fungsi untuk menutup popup thank you dan reset state
+  const handleCloseThankYou = () => {
+    setIsThankYouDialogOpen(false);
+    resetAllStates();
   };
 
   // Jalankan countdown ketika popup information dibuka dan berlanjut ke popup berikutnya
@@ -198,7 +209,7 @@ export default function Home() {
         7: 2,
         8: 3,
       },
-      "SINGLE": {
+      SINGLE: {
         6: 4,
         7: 5,
         8: 6,
@@ -237,7 +248,7 @@ export default function Home() {
   const formatTicketType = (category: string): string => {
     const categoryMap: Record<string, string> = {
       "EARLY BIRD": "Early Bird",
-      "SINGLE": "Single",
+      SINGLE: "Single",
       "COUPLE BUNDLE": "Couple Bundle",
       "FAMILY BUNDLE": "Family Bundle",
       "GROUP BUNDLE": "Group Bundle",
@@ -251,9 +262,23 @@ export default function Home() {
     return eventStatuses[eventId];
   };
 
+  const validateEmail = (email: string): boolean => {
+    // Validasi email harus memiliki @ dan domain
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const validateOrderData = () => {
     if (!formData.name || !formData.email || !formData.whatsapp) {
       setSubmitError("Mohon lengkapi semua field");
+      return false;
+    }
+
+    // Validasi format email
+    if (!validateEmail(formData.email)) {
+      setSubmitError(
+        "Mohon masukkan email yang valid (contoh: nama@domain.com)"
+      );
       return false;
     }
 
@@ -293,24 +318,44 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Cek jika pembayaran belum dilakukan (404 atau error terkait payment log)
+        if (
+          response.status === 404 ||
+          errorData.error?.toLowerCase().includes("no payment log") ||
+          errorData.error?.toLowerCase().includes("payment log found")
+        ) {
+          setIsPaymentNotDoneDialogOpen(true);
+          return;
+        }
+
         throw new Error(errorData.error || "Gagal memverifikasi pembayaran");
       }
 
       const data = await response.json();
 
-      // Tutup popup dan reset state
+      // Tutup popup payment dan buka popup thank you
       setIsPaymentDialogOpen(false);
-      resetAllStates();
+      setIsThankYouDialogOpen(true);
 
-      // Tampilkan pesan sukses
-      alert(data.message || "Pembayaran berhasil diverifikasi!");
+      // Reset state setelah popup thank you ditutup
+      // resetAllStates() akan dipanggil saat popup thank you ditutup
     } catch (error) {
       console.error("Error completing payment:", error);
-      setSubmitError(
+      const errorMessage =
         error instanceof Error
           ? error.message
-          : "Terjadi kesalahan saat memverifikasi pembayaran"
-      );
+          : "Terjadi kesalahan saat memverifikasi pembayaran";
+
+      // Cek jika error terkait pembayaran belum dilakukan
+      if (
+        errorMessage.toLowerCase().includes("no payment log") ||
+        errorMessage.toLowerCase().includes("payment log found")
+      ) {
+        setIsPaymentNotDoneDialogOpen(true);
+      } else {
+        setSubmitError(errorMessage);
+      }
     } finally {
       setIsCompletingPayment(false);
     }
@@ -344,13 +389,16 @@ export default function Home() {
         total_paid: totalPrice,
       };
 
-      const response = await fetch(`/api/participant/${participantData.order_id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `/api/participant/${participantData.order_id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -697,13 +745,14 @@ export default function Home() {
               </a>
             </p>
             <p className="text-[10px]">
-              Copyright Popu © Weekend Club. All Right Reserved.
+              Copyright © Popu Weekend Club x Cretech.
             </p>
+            <p className="text-[10px] -mt-3">All Rights Reserved.</p>
           </div>
         </div>
       </div>
 
-    {/* Popup */}
+      {/* Popup */}
       {/* Popup Selection */}
       <Dialog open={isDateDialogOpen}>
         <DialogContent
@@ -719,11 +768,19 @@ export default function Home() {
             ×
           </DialogClose>
           <DialogHeader>
-            <DialogTitle className="text-center text-2xl font-bold text-yellow-400 mb-2">
+            <DialogTitle className="sr-only">
               Ticket Selection
             </DialogTitle>
+            <div className="flex justify-center mb-3 mt-5">
+              <img
+                src="/images/selection.png"
+                alt="Thank You"
+                className="w-64 max-w-full"
+              />
+            </div>
             <DialogDescription className="text-center text-xs text-white/90 mb-6">
-              Please choose one date before continuing
+              Plase Select your visit date(s). You can buy tickets for multiple
+              days, with a maximum of 5 tickets per day.
             </DialogDescription>
           </DialogHeader>
 
@@ -810,7 +867,9 @@ export default function Home() {
             <Button
               type="button"
               onClick={handleProceedToContact}
-              disabled={!selectedDates.length || isLoadingContinue || isStatusLoading}
+              disabled={
+                !selectedDates.length || isLoadingContinue || isStatusLoading
+              }
               className="flex w-full mt-4 items-center justify-between rounded-2xl bg-[#F8BE1C] px-5 py-5 font-semibold text-black tracking-wide transition disabled:bg-yellow-200 disabled:text-black/50 hover:bg-[#e0a819] hover:translate-y-0.5 hover:shadow-lg "
             >
               <span>
@@ -965,7 +1024,7 @@ export default function Home() {
               />
             </div>
             <DialogDescription className="text-center text-xs text-white/90 p-10 -mt-10">
-             Confirm your order before payment
+              Confirm your order before payment
             </DialogDescription>
             <div className="flex justify-center -mt-10 mb-5">
               <div className="text-center text-2xl font-black text-yellow-300 tracking-[0.2em]">
@@ -996,7 +1055,9 @@ export default function Home() {
             <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
               <span className="text-white/70">Date</span>
               <span className="text-right">
-                {selectedDates.length ? formatDateTicket(selectedDates[0]) : "-"}
+                {selectedDates.length
+                  ? formatDateTicket(selectedDates[0])
+                  : "-"}
               </span>
             </div>
             <div className="flex justify-between border border-white/10 rounded-2xl px-4 py-3 bg-white/5">
@@ -1039,7 +1100,8 @@ export default function Home() {
           <DialogHeader>
             <DialogTitle className="sr-only">Pembayaran</DialogTitle>
             <DialogDescription className="sr-only">
-              Lengkapi pembayaran dengan memindai QR code atau transfer sesuai instruksi
+              Lengkapi pembayaran dengan memindai QR code atau transfer sesuai
+              instruksi
             </DialogDescription>
           </DialogHeader>
           {/* Header Payment */}
@@ -1049,7 +1111,7 @@ export default function Home() {
               alt="Payment"
               className="h-12 w-auto drop-shadow-[0_4px_0_rgba(0,0,0,0.6)]"
             />
-            
+
             <p className="mt-2 text-xs font-semibold text-black/80">
               Complete payment before:
             </p>
@@ -1071,7 +1133,9 @@ export default function Home() {
                 />
               ) : (
                 <div className="h-52 w-52 bg-gray-200 rounded-xl flex items-center justify-center">
-                  <span className="text-gray-400 text-xs">Loading QR Code...</span>
+                  <span className="text-gray-400 text-xs">
+                    Loading QR Code...
+                  </span>
                 </div>
               )}
             </div>
@@ -1086,7 +1150,9 @@ export default function Home() {
 
           {/* Order Detail Card */}
           <div className="mx-6 mt-4 rounded-3xl bg-[#0042A6] px-5 py-5 text-xs font-semibold shadow-md shadow-black/20">
-            <p className="text-sm font-black tracking-wide mb-4">ORDER DETAIL</p>
+            <p className="text-sm font-black tracking-wide mb-4">
+              ORDER DETAIL
+            </p>
 
             <div className="space-y-2 text-[11px]">
               <div className="flex justify-between gap-4">
@@ -1117,7 +1183,9 @@ export default function Home() {
               <div className="flex justify-between gap-4">
                 <span className="text-white/80">DATE:</span>
                 <span className="text-right text-white">
-                  {selectedDates.length ? formatDateTicket(selectedDates[0]) : "-"}
+                  {selectedDates.length
+                    ? formatDateTicket(selectedDates[0])
+                    : "-"}
                 </span>
               </div>
               <div className="flex justify-between gap-4 pt-1 border-t border-white/20 mt-2">
@@ -1146,6 +1214,81 @@ export default function Home() {
             >
               {isCompletingPayment ? "Verifying..." : "Payment Completed"}
             </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Popup Hold On */}
+      <Dialog open={isPaymentNotDoneDialogOpen}>
+        <DialogContent
+          showCloseButton={true}
+          className="max-w-[390px] w-[370px] sm:-ml-1.5 rounded-2xl text-white border-none bg-[#FF4808]"
+        >
+          <DialogHeader>
+            <DialogTitle className="sr-only">
+              HOLD ON
+            </DialogTitle>
+            <div className="flex justify-center mb-5 mt-5">
+              <img
+                src="/images/holdon.png"
+                alt="Please re-confirm"
+                className="w-44 max-w-full"
+              />
+            </div>
+            <DialogDescription className="text-center text-sm text-white/90">
+              Your payment has not been completed. Please finish your payment
+              first, before clicking.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-6 flex justify-center">
+            <Button
+              type="button"
+              onClick={() => setIsPaymentNotDoneDialogOpen(false)}
+              className="w-full bg-yellow-400 text-black font-bold text-lg py-3 rounded-xl hover:bg-yellow-500"
+            >
+              Got it!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Popup Thank You */}
+      <Dialog open={isThankYouDialogOpen}>
+        <DialogContent
+          showCloseButton={false}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          className="max-w-[390px] w-[370px] sm:-ml-1.5 rounded-2xl text-white border-none bg-linear-to-b from-[#1E4492] to-[#399BDA]"
+        >
+          <DialogHeader>
+            <DialogTitle className="sr-only">
+              Thank You!
+            </DialogTitle>
+            <div className="flex justify-center mb-7 mt-5">
+              <img
+                src="/images/thankyou.png"
+                alt="Thank You"
+                className="w-64 h-auto max-w-full"
+              />
+            </div>
+            <DialogDescription className="text-center text-sm text-white/90 mb-2">
+              Your payment has been successfully verified.
+            </DialogDescription>
+            <DialogDescription className="text-center text-sm text-white/80">
+              Thank you for purchasing your tickets. We will send your ticket
+              details to your email and WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-6 flex justify-center">
+            <Button
+              type="button"
+              onClick={handleCloseThankYou}
+              className="w-full bg-yellow-400 text-black font-bold text-lg py-3 rounded-xl hover:bg-yellow-500"
+            >
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
