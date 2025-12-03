@@ -70,7 +70,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: Partial<Participant> = await request.json();
+    const body = await request.json();
+    const { event_id, qty } = body;
+
+    if (!event_id) {
+      return NextResponse.json(
+        { error: "event_id is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!qty) {
+      return NextResponse.json(
+        { error: "qty is required" },
+        { status: 400 }
+      );
+    }
+
+    // Payload ke API eksternal
+    const payload = {
+      event_id,
+      qty,
+    };
 
     const response = await fetch(API_URL, {
       method: "POST",
@@ -78,7 +99,7 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${API_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -90,7 +111,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(data, { status: 200 });
   } catch (error) {
     console.error("Error creating participant:", error);
     return NextResponse.json(
