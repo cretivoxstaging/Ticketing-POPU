@@ -150,7 +150,7 @@ export default function Home() {
   };
 
   const increase = () => {
-    setQty((prev) => prev + 1);
+    setQty((prev) => Math.min(5, prev + 1));
   };
 
   const formatCurrency = (value: number) =>
@@ -847,7 +847,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={increase}
-                  disabled={isLoadingContinue}
+                  disabled={isLoadingContinue || qty >= 5}
                   className="size-10 rounded-full bg-yellow-400 text-black text-2xl font-bold leading-none shadow disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   +

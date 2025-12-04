@@ -26,7 +26,8 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "types": ["node", "next/image-types/global"]
   },
   "include": [
     "next-env.d.ts",
