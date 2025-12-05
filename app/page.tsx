@@ -745,7 +745,7 @@ export default function Home() {
               </a>
             </p>
             <p className="text-[10px]">
-              Copyright © Popu Weekend Club x Cretech.
+              Copyright © 2025 Popu Weekend Club x Cretech.
             </p>
             <p className="text-[10px] -mt-3">All Rights Reserved.</p>
           </div>
