@@ -42,6 +42,61 @@ type EventStatus = {
   soldOut: boolean;
 };
 
+// Konfigurasi aktivasi tiket berdasarkan tanggal
+type TicketActivationConfig = {
+  startDate: Date; // Tanggal mulai aktif
+  endDate: Date; // Tanggal akhir aktif
+};
+
+const ticketActivationConfig: Record<string, TicketActivationConfig> = {
+  "EARLY BIRD": {
+    startDate: new Date("2025-12-01"),
+    endDate: new Date("2026-02-28"),
+  },
+  SINGLE: {
+    startDate: new Date("2026-01-01"),
+    endDate: new Date("2026-02-28"),
+  },
+  "COUPLE BUNDLE": {
+    startDate: new Date("2026-01-01"),
+    endDate: new Date("2026-02-28"),
+  },
+  "FAMILY BUNDLE": {
+    startDate: new Date("2026-01-01"),
+    endDate: new Date("2026-02-28"),
+  },
+  "GROUP BUNDLE": {
+    startDate: new Date("2026-01-01"),
+    endDate: new Date("2026-02-28"),
+  },
+  "NORMAL TICKET": {
+    startDate: new Date("2026-01-01"),
+    endDate: new Date("2026-02-28"),
+  },
+};
+
+// Fungsi untuk mengecek apakah tiket aktif berdasarkan tanggal
+const isTicketActive = (category: string): boolean => {
+  const config = ticketActivationConfig[category];
+  if (!config) return true; // Default aktif jika tidak ada konfigurasi
+
+  const now = new Date();
+  // Set waktu ke tengah malam untuk perbandingan tanggal
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const start = new Date(
+    config.startDate.getFullYear(),
+    config.startDate.getMonth(),
+    config.startDate.getDate()
+  );
+  const end = new Date(
+    config.endDate.getFullYear(),
+    config.endDate.getMonth(),
+    config.endDate.getDate()
+  );
+
+  return today >= start && today <= end;
+};
+
 export default function Home() {
   const [qty, setQty] = useState(1);
   const [isDateDialogOpen, setIsDateDialogOpen] = useState(false);
@@ -537,27 +592,43 @@ export default function Home() {
             />
 
             {/* Early Bird */}
-            <div className="mt-1 flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold tracking-wide text-orange-600">
-                  EARLY BIRD
-                </p>
-                <p className="mt-1 text-[9px] font-bold text-orange-600">
-                  promo price, limited stock!
-                </p>
+            <div className="mt-1 relative">
+              <div
+                className={`flex items-center justify-between ${
+                  !isTicketActive("EARLY BIRD") ? "bg-blur-xs opacity-30" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-lg font-semibold tracking-wide text-orange-600">
+                    EARLY BIRD
+                  </p>
+                  <p className="mt-1 text-[9px] font-bold text-orange-600">
+                    promo price, limited stock!
+                  </p>
+                </div>
+                <div className="flex items-center text-[18px] font-semibold text-orange-600">
+                  25k
+                </div>
+                <div className="">
+                  <button
+                    type="button"
+                    onClick={() => handleBuyClick(25000, "EARLY BIRD")}
+                    disabled={!isTicketActive("EARLY BIRD")}
+                    className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    Buy
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center text-[18px] font-semibold text-orange-600">
-                25k
-              </div>
-              <div className="">
-                <button
-                  type="button"
-                  onClick={() => handleBuyClick(25000, "EARLY BIRD")}
-                  className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500"
-                >
-                  Buy
-                </button>
-              </div>
+              {!isTicketActive("EARLY BIRD") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 mr-20">
+                  <img
+                    src="/images/unavailable.png"
+                    alt="Unavailable"
+                    className="w-30 max-h-full object-contain"
+                  />
+                </div>
+              )}
             </div>
             <StarDivider
               content="***************************************"
@@ -566,27 +637,43 @@ export default function Home() {
             />
 
             {/* SINGLE */}
-            <div className="mt-1 flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold tracking-wide text-orange-600">
-                  SINGLE
-                </p>
-                <p className="mt-1 text-[9px] font-bold text-orange-600">
-                  1 ticket - ala carte
-                </p>
+            <div className="mt-1 relative">
+              <div
+                className={`flex items-center justify-between ${
+                  !isTicketActive("SINGLE") ? "bg-blur-xs opacity-30" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-lg font-semibold tracking-wide text-orange-600">
+                    SINGLE
+                  </p>
+                  <p className="mt-1 text-[9px] font-bold text-orange-600">
+                    1 ticket - ala carte
+                  </p>
+                </div>
+                <div className="flex items-center text-[18px] font-semibold text-orange-600 ml-10">
+                  50k
+                </div>
+                <div className="">
+                  <button
+                    type="button"
+                    onClick={() => handleBuyClick(50000, "SINGLE")}
+                    disabled={!isTicketActive("SINGLE")}
+                    className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    Buy
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center text-[18px] font-semibold text-orange-600 ml-10">
-                50k
-              </div>
-              <div className="">
-                <button
-                  type="button"
-                  onClick={() => handleBuyClick(50000, "SINGLE")}
-                  className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500"
-                >
-                  Buy
-                </button>
-              </div>
+              {!isTicketActive("SINGLE") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none mr-20">
+                  <img
+                    src="/images/unavailable.png"
+                    alt="Unavailable"
+                    className="w-30 object-contain"
+                  />
+                </div>
+              )}
             </div>
             <StarDivider
               content="***************************************"
@@ -595,27 +682,43 @@ export default function Home() {
             />
 
             {/* COUPLE */}
-            <div className="mt-1 flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold tracking-wide text-orange-600">
-                  COUPLE BUNDLE
-                </p>
-                <p className="mt-1 text-[9px] font-bold text-orange-600">
-                  2 tickets - buy in pair
-                </p>
+            <div className="mt-1 relative">
+              <div
+                className={`flex items-center justify-between ${
+                  !isTicketActive("COUPLE BUNDLE") ? "bg-blur-xs opacity-30" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-lg font-semibold tracking-wide text-orange-600">
+                    COUPLE BUNDLE
+                  </p>
+                  <p className="mt-1 text-[9px] font-bold text-orange-600">
+                    2 tickets - buy in pair
+                  </p>
+                </div>
+                <div className="flex items-center text-[18px] font-semibold text-orange-600">
+                  90k
+                </div>
+                <div className="">
+                  <button
+                    type="button"
+                    onClick={() => handleBuyClick(90000, "COUPLE BUNDLE")}
+                    disabled={!isTicketActive("COUPLE BUNDLE")}
+                    className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    Buy
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center text-[18px] font-semibold text-orange-600">
-                90k
-              </div>
-              <div className="">
-                <button
-                  type="button"
-                  onClick={() => handleBuyClick(90000, "COUPLE BUNDLE")}
-                  className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500"
-                >
-                  Buy
-                </button>
-              </div>
+              {!isTicketActive("COUPLE BUNDLE") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none mr-20">
+                  <img
+                    src="/images/unavailable.png"
+                    alt="Unavailable"
+                    className="w-30 object-contain"
+                  />
+                </div>
+              )}
             </div>
             <StarDivider
               content="***************************************"
@@ -624,27 +727,43 @@ export default function Home() {
             />
 
             {/* Family Bundle */}
-            <div className="mt-1 flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold tracking-wide text-orange-600">
-                  FAMILY BUNDLE
-                </p>
-                <p className="mt-1 text-[9px] font-bold text-orange-600">
-                  4 tickets - family pack
-                </p>
+            <div className="mt-1 relative">
+              <div
+                className={`flex items-center justify-between ${
+                  !isTicketActive("FAMILY BUNDLE") ? "bg-blur-xs opacity-30" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-lg font-semibold tracking-wide text-orange-600">
+                    FAMILY BUNDLE
+                  </p>
+                  <p className="mt-1 text-[9px] font-bold text-orange-600">
+                    4 tickets - family pack
+                  </p>
+                </div>
+                <div className="flex items-center text-[18px] font-semibold text-orange-600 -ml-3">
+                  170k
+                </div>
+                <div className="">
+                  <button
+                    type="button"
+                    onClick={() => handleBuyClick(170000, "FAMILY BUNDLE")}
+                    disabled={!isTicketActive("FAMILY BUNDLE")}
+                    className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    Buy
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center text-[18px] font-semibold text-orange-600 -ml-3">
-                170k
-              </div>
-              <div className="">
-                <button
-                  type="button"
-                  onClick={() => handleBuyClick(170000, "FAMILY BUNDLE")}
-                  className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500"
-                >
-                  Buy
-                </button>
-              </div>
+              {!isTicketActive("FAMILY BUNDLE") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none mr-20">
+                  <img
+                    src="/images/unavailable.png"
+                    alt="Unavailable"
+                    className="w-30 object-contain"
+                  />
+                </div>
+              )}
             </div>
             <StarDivider
               content="***************************************"
@@ -653,27 +772,43 @@ export default function Home() {
             />
 
             {/* Group Bundle */}
-            <div className="mt-1 flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold tracking-wide text-orange-600">
-                  GROUP BUNDLE
-                </p>
-                <p className="mt-1 text-[9px] font-bold text-orange-600">
-                  8 tickets - Jumbo pack
-                </p>
+            <div className="mt-1 relative">
+              <div
+                className={`flex items-center justify-between ${
+                  !isTicketActive("GROUP BUNDLE") ? "bg-blur-xs opacity-30" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-lg font-semibold tracking-wide text-orange-600">
+                    GROUP BUNDLE
+                  </p>
+                  <p className="mt-1 text-[9px] font-bold text-orange-600">
+                    8 tickets - Jumbo pack
+                  </p>
+                </div>
+                <div className="flex items-center text-[18px] font-semibold text-orange-600">
+                  300k
+                </div>
+                <div className="">
+                  <button
+                    type="button"
+                    onClick={() => handleBuyClick(300000, "GROUP BUNDLE")}
+                    disabled={!isTicketActive("GROUP BUNDLE")}
+                    className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    Buy
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center text-[18px] font-semibold text-orange-600">
-                300k
-              </div>
-              <div className="">
-                <button
-                  type="button"
-                  onClick={() => handleBuyClick(300000, "GROUP BUNDLE")}
-                  className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500"
-                >
-                  Buy
-                </button>
-              </div>
+              {!isTicketActive("GROUP BUNDLE") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none mr-20">
+                  <img
+                    src="/images/unavailable.png"
+                    alt="Unavailable"
+                    className="w-30 object-contain"
+                  />
+                </div>
+              )}
             </div>
             <StarDivider
               content="***************************************"
@@ -682,27 +817,43 @@ export default function Home() {
             />
 
             {/* Normal */}
-            <div className="mt-1 flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold tracking-wide text-orange-600">
-                  NORMAL TICKET
-                </p>
-                <p className="mt-1 text-[9px] font-bold text-orange-600">
-                  promo price, limited stock!
-                </p>
+            <div className="mt-1 relative">
+              <div
+                className={`flex items-center justify-between ${
+                  !isTicketActive("NORMAL TICKET") ? "bg-blur-xs opacity-30" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-lg font-semibold tracking-wide text-orange-600">
+                    NORMAL TICKET
+                  </p>
+                  <p className="mt-1 text-[9px] font-bold text-orange-600">
+                    promo price, limited stock!
+                  </p>
+                </div>
+                <div className="flex items-center text-[18px] font-semibold text-orange-600">
+                  75k
+                </div>
+                <div className="">
+                  <button
+                    type="button"
+                    onClick={() => handleBuyClick(75000, "NORMAL TICKET")}
+                    disabled={!isTicketActive("NORMAL TICKET")}
+                    className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  >
+                    Buy
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center text-[18px] font-semibold text-orange-600">
-                75k
-              </div>
-              <div className="">
-                <button
-                  type="button"
-                  onClick={() => handleBuyClick(75000, "NORMAL TICKET")}
-                  className="mt-2 w-10 max-w-xs rounded-2xl bg-yellow-400 py-1 text-center text-[15px] font-semibold text-black shadow-md transition-all duration-200 hover:scale-105 hover:bg-yellow-500"
-                >
-                  Buy
-                </button>
-              </div>
+              {!isTicketActive("NORMAL TICKET") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none mr-20">
+                  <img
+                    src="/images/unavailable.png"
+                    alt="Unavailable"
+                    className="w-30 object-contain"
+                  />
+                </div>
+              )}
             </div>
             <StarDivider
               content="***************************************"
@@ -744,10 +895,12 @@ export default function Home() {
                 <span>@POPUWEEKENDCLUB</span>
               </a>
             </p>
-            <p className="text-[10px]">
-              Copyright © 2025 Popu Weekend Club x Cretech.
+            <p className="text-[9px]">
+              Copyright © {new Date().getFullYear()} Popu Weekend Club. All Rights Reserved.
             </p>
-            <p className="text-[10px] -mt-3">All Rights Reserved.</p>
+            <p className="text-[9px] text-center -mt-3 text-sidebar-foreground">
+            Powered by <span className="font-bold italic">CRETECH</span>
+          </p>
           </div>
         </div>
       </div>
